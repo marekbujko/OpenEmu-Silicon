@@ -55,18 +55,24 @@ brew install --cask openemu-silicon
 
 ---
 
-## What's New
+## What's New in v1.0.7
 
-Recent highlights from active development:
+- **RetroAchievements — Phase 1** — Earn achievements automatically as you play across 9 cores and 7 systems: NES (FCEU, Nestopia), SNES (SNES9x, BSNES), Game Boy / GBC (Gambatte, mGBA), Game Boy Advance (mGBA), and Genesis / Master System / Game Gear / Sega CD / SG-1000 (Genesis Plus GX). Log in once in Preferences → Achievements. See the [RetroAchievements wiki page](https://github.com/nickybmon/OpenEmu-Silicon/wiki/RetroAchievements) for setup.
+- **Play With… core selection** — Right-click any game in your library and choose **Play With…** to pick which core to use for that session, without changing your default.
+- **3DO now works out of the box** — A bundle identifier bug was silently dropping the 3DO system at launch. Fixed — 3DO appears in your console list automatically with no extra steps.
+- **SNES rewind fixed** — Rewinding no longer produces a blank screen.
+- **PSX black bar fixed** — PlayStation games no longer show a black bar on the right side of the screen.
+- **N64 GameShark cheats fixed** — Cheat codes now apply correctly in Mupen64Plus.
+- **Dreamcast speed and audio fixed** — Flycast no longer runs faster than real-time on high-refresh-rate displays, and the distorted audio that came with it is gone.
+- **NES color palette restored** — FCEU was rendering all NES games with a washed-out grey palette due to a regression. Fixed.
 
-- **Sony PSP** — PPSSPP-Core fully rebuilt and integrated. PSP emulation now works natively on Apple Silicon.
-- **Nintendo 64** — Mupen64Plus revived and working. N64 emulation is back.
-- **Sega Dreamcast** — Migrated from Reicast to Flycast. Dreamcast emulation is significantly more stable.
-- **Gamecube** - Gamecube is playable via Dolphin and should be stable
-- **ScreenScraper cover art** — The library now automatically fetches box art from [ScreenScraper](https://www.screenscraper.fr), replacing the old manual cover art workflow entirely. Enter your credentials in Preferences → Cover Art and your library fills in automatically.
-- **Core updates** — SNES9x updated to 1.63, mGBA updated to 0.10.5.
-- **Pokémon Mini** — PokeMini and Potator (Watara Supervision) workspace integration fixed; both now build and run.
-- **macOS 26 (Tahoe) compatibility** — Multiple fixes across the app and build system for full Tahoe support.
+**Earlier highlights:**
+- **Sony PSP** — PPSSPP-Core rebuilt and integrated.
+- **Nintendo 64** — Mupen64Plus revived and working.
+- **Sega Dreamcast** — Migrated from Reicast to Flycast for a significantly more stable experience.
+- **GameCube / Wii** — Dolphin core integrated and working.
+- **ScreenScraper cover art** — Automatic box art via [ScreenScraper](https://www.screenscraper.fr). Enter credentials in Preferences → Cover Art.
+- **macOS 26 (Tahoe) compatibility** — Full support verified.
 
 ---
 
@@ -99,7 +105,7 @@ Quick summary: 30+ systems work today, including NES, SNES, Game Boy, GBA, N64, 
 
 OpenEmu is one of the best pieces of Mac software ever made — a beautifully designed, first-class game emulation frontend that brought together dozens of emulation cores under a single native macOS UI. The original project went quiet around 2022.
 
-This fork started from [bazley82's OpenEmuARM64](https://github.com/bazley82/OpenEmuARM64), which did the foundational work of porting all 25 cores to build natively on Apple Silicon. Since then this project has diverged significantly: Nintendo 64 and Pokémon Mini were rebuilt from scratch and brought back online; PPSSPP was fully re-integrated to add PSP emulation on Apple Silicon; Dreamcast was migrated from the stale Reicast codebase to Flycast for a much more stable experience; ScreenScraper cover art was integrated to bring the library back to life; multiple core updates shipped (SNES9x 1.63, mGBA 0.10.5); and the entire app was hardened for macOS 26 (Tahoe) compatibility. The goal is to make OpenEmu genuinely great on modern Macs again — not just technically booting, but actually usable for players.
+This fork started from [bazley82's OpenEmuARM64](https://github.com/bazley82/OpenEmuARM64), which did the foundational work of porting all 25 cores to build natively on Apple Silicon. Since then this project has diverged significantly: Nintendo 64 and Pokémon Mini were rebuilt from scratch and brought back online; PPSSPP was fully re-integrated to add PSP emulation on Apple Silicon; Dreamcast was migrated from the stale Reicast codebase to Flycast for a much more stable experience; ScreenScraper cover art was integrated to bring the library back to life; RetroAchievements support shipped across 9 cores; core updates shipped (SNES9x 1.63.1, mGBA 0.10.6, Mupen64Plus 2.5.11); and the entire app was hardened for macOS 26 (Tahoe) compatibility. The goal is to make OpenEmu genuinely great on modern Macs again — not just technically booting, but actually usable for players.
 
 **Lineage:**
 - [OpenEmu/OpenEmu](https://github.com/OpenEmu/OpenEmu) — the original project, built by the OpenEmu team
