@@ -24,22 +24,17 @@ Fixes #
 
 ## How to test locally
 
+Navigate to your local clone, then paste this block. Replace `<PR_NUMBER>` with this PR's number. For Flycast use `-scheme "OpenEmu + Flycast"` with `clean build`; for Mednafen use `-scheme "OpenEmu + Mednafen" -configuration Release`.
+
 ```bash
-# 1. Check out this PR (run from your local clone)
 cd ~/Documents/Cursor/Open\ Emu
 gh pr checkout <PR_NUMBER> --repo nickybmon/OpenEmu-Silicon
-
-# 2. Build — replace -scheme OpenEmu with the scheme covering your change
-# For Flycast: -scheme "OpenEmu + Flycast" with clean build
-# For Mednafen: -scheme "OpenEmu + Mednafen" -configuration Release
 xcodebuild \
   -workspace OpenEmu-metal.xcworkspace \
   -scheme OpenEmu \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   build 2>&1 | tail -20
-
-# 3. Launch (if this PR touches a core, install it first — see note below)
 BUILD_PRODUCTS=$(xcodebuild \
   -workspace OpenEmu-metal.xcworkspace \
   -scheme OpenEmu \
@@ -47,15 +42,18 @@ BUILD_PRODUCTS=$(xcodebuild \
   -showBuildSettings 2>/dev/null \
   | awk '/^\s+BUILT_PRODUCTS_DIR/{print $3; exit}')
 open "$BUILD_PRODUCTS/OpenEmu.app"
-
-# Core install (if needed):
-# cp -R "$BUILD_PRODUCTS/<CoreName>.oecoreplugin" \
-#   ~/Library/Application\ Support/OpenEmu/Cores/<CoreName>.oecoreplugin
-# codesign --force --sign - \
-#   ~/Library/Application\ Support/OpenEmu/Cores/<CoreName>.oecoreplugin
 ```
 
-<!-- Replace <PR_NUMBER> and add any PR-specific setup here (BIOS files, permissions to revoke, specific ROM to test with). -->
+If this PR touches a core, install it before the `open` line:
+
+```bash
+cp -R "$BUILD_PRODUCTS/<CoreName>.oecoreplugin" \
+  ~/Library/Application\ Support/OpenEmu/Cores/<CoreName>.oecoreplugin
+codesign --force --sign - \
+  ~/Library/Application\ Support/OpenEmu/Cores/<CoreName>.oecoreplugin
+```
+
+<!-- Add any PR-specific setup here (BIOS files, permissions to revoke, specific ROM to test with). -->
 
 ---
 
