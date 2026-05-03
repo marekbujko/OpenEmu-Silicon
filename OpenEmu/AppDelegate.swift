@@ -488,6 +488,16 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
         _ = OEBindingsController.self
         let dm = OEDeviceManager.shared
         if #available(macOS 10.15, *) {
+            #if DEBUG
+            // In debug builds, always call requestAccess() regardless of what
+            // IOHIDCheckAccess reports. IOHIDCheckAccess may return .granted based
+            // on the production app's TCC bundle-ID entry, causing the switch below
+            // to hit default:break — but macOS HID event delivery is gated on the
+            // specific binary being registered, so the debug binary never receives
+            // events. IOHIDRequestAccess is idempotent when permission is already
+            // granted (returns true, no dialog), so this is safe to call every launch.
+            dm.requestAccess()
+            #else
             switch dm.accessType {
             case .unknown:
                 // TCC may return "unknown" on subsequent launches when the app lacks a
@@ -512,6 +522,7 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
             default:
                 break
             }
+            #endif
             // Re-enumerate keyboards in case permission was granted after init.
             dm.rescanKeyboardDevices()
         }
