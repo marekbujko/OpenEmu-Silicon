@@ -42,6 +42,7 @@ jobs:
       - name: Generate credentials stubs
         run: |
           cp OpenEmu/ScreenScraperDevCredentials.template.swift OpenEmu/ScreenScraperDevCredentials.swift
+          cp OpenEmu/OEGoogleDriveSecrets.template.swift OpenEmu/OEGoogleDriveSecrets.swift
 
       - name: Build
         run: |

@@ -16,7 +16,7 @@ import Foundation
 
 extension OEGoogleDriveConfig {
     /// Your real Google OAuth Client ID.
-    static let _clientID     = "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    static let clientID     = "YOUR_CLIENT_ID.apps.googleusercontent.com"
     /// Your real Google OAuth Client Secret.
-    static let _clientSecret = "YOUR_CLIENT_SECRET"
+    static let clientSecret = "YOUR_CLIENT_SECRET"
 }

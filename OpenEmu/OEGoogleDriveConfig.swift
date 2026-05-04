@@ -29,16 +29,12 @@ enum OEGoogleDriveConfig {
     
     // MARK: - OAuth Credentials
     
-    // TODO: Inject real credentials before Cloud Sync can function.
-    // Strategy options: (a) CI secret → OEGoogleDriveSecrets.swift at build time,
-    //                   (b) runtime user-provided credentials in Preferences.
-    // See: OEGoogleDriveSecrets.template.swift for the secrets-file pattern.
-    // Tracked in: https://github.com/nickybmon/OpenEmu-Silicon/issues/129
-    /// Your Google API OAuth 2.0 Client ID.
-    static let clientID     = "YOUR_CLIENT_ID_HERE"
-    
-    /// Your Google API OAuth 2.0 Client Secret.
-    static let clientSecret = "YOUR_CLIENT_SECRET_HERE"
+    // Real credentials live in OEGoogleDriveSecrets.swift (gitignored).
+    // Locally: copy OEGoogleDriveSecrets.template.swift → OEGoogleDriveSecrets.swift and fill in values.
+    // In CI: the release workflow injects GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET secrets.
+    // The properties below are defined in that file; this extension just documents them.
+    // static let clientID: String      — defined in OEGoogleDriveSecrets.swift
+    // static let clientSecret: String  — defined in OEGoogleDriveSecrets.swift
     
     // MARK: - OAuth Endpoints
     
@@ -48,19 +44,18 @@ enum OEGoogleDriveConfig {
     
     // MARK: - API Scopes
 
-    /// Requests access to files created by this app only (user-visible in Drive).
-    static let scopes = ["https://www.googleapis.com/auth/drive.file"]
+    /// Requests access to the hidden App Data folder only (not visible in Drive UI).
+    static let scopes = ["https://www.googleapis.com/auth/drive.appdata"]
 
     // MARK: - API Endpoints
 
     static let driveAPIBaseURL   = "https://www.googleapis.com/drive/v3"
     static let uploadAPIBaseURL  = "https://www.googleapis.com/upload/drive/v3"
 
-    // MARK: - Save Folder
+    // MARK: - App Data Folder
 
-    /// Name of the folder created in the root of the user's Google Drive.
-    /// User-visible in the Drive web UI, browseable, and removable.
-    static let saveFolderName = "OpenEmu Saves"
+    /// Fixed identifier for the Drive hidden App Data folder.
+    static let appDataFolderName = "appDataFolder"
     
     // MARK: - Keychain
     

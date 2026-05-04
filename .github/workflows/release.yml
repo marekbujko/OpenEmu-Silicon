@@ -121,9 +121,17 @@ jobs:
 
       # ── Credential stubs ────────────────────────────────────────────────────
       - name: Generate credential stubs
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
           cp OpenEmu/ScreenScraperDevCredentials.template.swift \
              OpenEmu/ScreenScraperDevCredentials.swift
+          sed \
+            -e "s|YOUR_CLIENT_ID.apps.googleusercontent.com|${GOOGLE_CLIENT_ID}|g" \
+            -e "s|YOUR_CLIENT_SECRET|${GOOGLE_CLIENT_SECRET}|g" \
+            OpenEmu/OEGoogleDriveSecrets.template.swift \
+            > OpenEmu/OEGoogleDriveSecrets.swift
 
       # ── Sparkle private key ─────────────────────────────────────────────────
       # On self-hosted runner this key is already in the keychain.
