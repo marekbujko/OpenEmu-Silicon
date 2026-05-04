@@ -1,8 +1,15 @@
 # Libretro Bridge — Contributor Guide
 
-_Last updated: 2026-04-16_
+_Last updated: 2026-05-04_
 
 This document governs how nickybmon and pystIC divide work on the libretro bridge without creating merge conflicts. Read it before starting any bridge work.
+
+### What shipped in feat/libretro-bridge (May 2026)
+
+- **System-centric Cores prefs UI** — `PrefCoresController` rewritten. One row per system, core picker dropdown, closes #237 (system-level half).
+- **RetroArch local core discovery** — scanner reads `~/Library/Application Support/RetroArch/cores/` and `info/` at startup, surfaces discovered cores in the Select Core picker, auto-creates `.oecoreplugin` wrappers on selection.
+- **OEArcadeSystemResponderClient** — arcade input support added to `OELibretroCoreTranslator` (FBA CPS-2 tested and working).
+- **Confirmed hw_render blocker** — Flycast and Dolphin (RetroArch) crash on launch; tracked in #221 and #348.
 
 ---
 
