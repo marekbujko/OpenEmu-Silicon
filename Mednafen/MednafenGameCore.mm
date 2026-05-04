@@ -3612,6 +3612,11 @@ static void mednafen_rc_event_handler(const rc_client_event_t *event, rc_client_
             rc_client_set_userdata(_rcClient, (__bridge void *)self);
             rc_client_set_event_handler(_rcClient, mednafen_rc_event_handler);
             rc_client_set_hardcore_enabled(_rcClient, 0);
+            // Defer address validation to executeFrame so emulated RAM is live before rcheevos
+            // validates achievement memrefs. Without this, activation runs on the HTTP callback
+            // thread before Mednafen's core is fully started, returning 0 for every address and
+            // silently deactivating all achievements before the game begins.
+            rc_client_set_allow_background_memory_reads(_rcClient, 0);
             rc_client_enable_logging(_rcClient, RC_CLIENT_LOG_LEVEL_INFO, mednafen_rc_log);
 
             __weak MednafenGameCore *weakSelf = self;
