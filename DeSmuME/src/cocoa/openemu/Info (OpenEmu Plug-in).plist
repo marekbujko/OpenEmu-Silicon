@@ -49,6 +49,6 @@
 	<key>SUEnableAutomaticChecks</key>
 	<string>1</string>
 	<key>SUFeedURL</key>
-	<string>https://raw.github.com/OpenEmu/OpenEmu-Update/master/desmume_appcast.xml</string>
+	<string>https://raw.githubusercontent.com/nickybmon/OpenEmu-Silicon/main/Appcasts/desmume.xml</string>
 </dict>
 </plist>

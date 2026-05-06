@@ -93,6 +93,17 @@ pass() { echo "PASS  $1"; }
 fail() { echo "FAIL  $1"; FAILURES=$((FAILURES+1)); }
 info() { echo "----  $1"; }
 
+# --- Core feed-URL guardrail (precondition for --core runs) --------------
+
+if [ -n "$CORE" ] && [ -x "./Scripts/check-core-feed-urls.sh" ]; then
+  if ./Scripts/check-core-feed-urls.sh >/dev/null 2>&1; then
+    pass "check-core-feed-urls.sh"
+  else
+    fail "check-core-feed-urls.sh — upstream URL or missing appcast detected"
+    ./Scripts/check-core-feed-urls.sh || true
+  fi
+fi
+
 # --- Build ---------------------------------------------------------------
 
 if [ -n "$CORE" ]; then
