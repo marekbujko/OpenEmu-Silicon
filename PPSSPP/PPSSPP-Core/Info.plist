@@ -35,6 +35,6 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://raw.github.com/OpenEmu/OpenEmu-Update/master/ppsspp_appcast.xml</string>
+	<string>https://raw.githubusercontent.com/nickybmon/OpenEmu-Silicon/main/Appcasts/ppsspp.xml</string>
 </dict>
 </plist>

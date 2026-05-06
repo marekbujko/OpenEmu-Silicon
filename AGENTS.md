@@ -243,6 +243,27 @@ Bump rules:
 
 ---
 
+## Core update channel
+
+Every shipped core plugin embeds a `SUFeedURL` in its `Info.plist`. Sparkle reads it from the **installed** plugin bundle, so it controls updates for users who already have the core.
+
+The canonical pattern, used by all cores nickybmon ships, is:
+
+```
+https://raw.githubusercontent.com/nickybmon/OpenEmu-Silicon/main/Appcasts/<core>.xml
+```
+
+`<core>` is the lowercased core name (e.g. `dolphin`, `mednafen`, `bluemsx`). The matching file must exist under `Appcasts/` in this repo — that is the file Sparkle fetches.
+
+Rules:
+
+- Never re-introduce `OpenEmu-Update`, `raw.github.com/OpenEmu`, or `appcast.openemu.org` URLs into a core `Info.plist`. That update channel is upstream-owned and dormant; updates published here will not reach users.
+- When adding a new core, add its appcast file to `Appcasts/<core>.xml` *and* set the `Info.plist` `SUFeedURL` to the canonical URL above in the same commit.
+- `Scripts/check-core-feed-urls.sh` enforces both rules and is wired into `Scripts/verify.sh --core` as a precondition.
+- Core appcast entries should be EdDSA-signed when newly published. `Scripts/update_core_appcast.py --sign-zip <path-to-zip>` runs Sparkle's `sign_update` against the local zip and embeds `sparkle:edSignature` on the new `<enclosure>`. The host app's existing Sparkle keypair is reused — do not generate a new one.
+
+---
+
 ## License Rules
 
 The main app is **BSD 2-Clause**. Emulator cores are mostly **GPL v2**. Key rules:
