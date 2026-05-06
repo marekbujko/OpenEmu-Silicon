@@ -56,6 +56,16 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           rm "$RUNNER_TEMP/cert.p12"
 
+      # ── Restore Sparkle private key ─────────────────────────────────────────
+      - name: Restore Sparkle private key
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          PREFS_DIR="$HOME/Library/Preferences/Sparkle"
+          mkdir -p "$PREFS_DIR"
+          echo "$SPARKLE_KEY" > "$PREFS_DIR/private_ed25519_key"
+          chmod 600 "$PREFS_DIR/private_ed25519_key"
+
       # ── Store notarytool keychain profile ───────────────────────────────────
       - name: Store notarytool credentials
         env:
@@ -269,12 +279,21 @@ jobs:
       # ── Update core appcast ─────────────────────────────────────────────────
       - name: Update ${{ env.APPCAST_FILE }}
         run: |
+          SIGN_UPDATE=$(find "${{ env.DERIVED_DATA_PATH }}" \
+            -path "*/Sparkle/bin/sign_update" \
+            -not -path "*/old_dsa_scripts/*" \
+            2>/dev/null | head -1)
+          [ -n "$SIGN_UPDATE" ] || { echo "ERROR: sign_update not found in $DERIVED_DATA_PATH" >&2; exit 1; }
+          echo "sign_update: $SIGN_UPDATE"
+
           python3 Scripts/update_core_appcast.py \
             "${{ env.APPCAST_FILE }}" \
             "${{ env.CORE }}" \
             "${{ env.VERSION }}" \
             "${{ env.DOWNLOAD_URL }}" \
-            "${{ env.ZIP_SIZE }}"
+            "${{ env.ZIP_SIZE }}" \
+            --sign-zip "${{ env.ZIP_PATH }}" \
+            --sign-update "$SIGN_UPDATE"
 
       # ── Commit appcast back to main ─────────────────────────────────────────
       - name: Commit and push updated appcast
