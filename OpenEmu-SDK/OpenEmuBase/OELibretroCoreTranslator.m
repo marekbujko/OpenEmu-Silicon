@@ -56,7 +56,7 @@
 #define RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE (47 | 0x10000)
 #endif
 
-NSString * const OELibretroBridgeVersion = @"1";
+NSString * const OELibretroBridgeVersion = @"2";
 
 
 @interface OELibretroCoreTranslator () <OELibretroInputReceiver>
@@ -91,6 +91,16 @@ NSString * const OELibretroBridgeVersion = @"1";
 @property (nonatomic, copy) NSString *biosPath;
 @property (nonatomic, copy) NSString *savesPath;
 @property (nonatomic, copy) NSString *supportPath;
+
+// Defaults the core declared via SET_VARIABLES / SET_CORE_OPTIONS{,_V2,_INTL}.
+// Populated as the core initialises; consulted on every GET_VARIABLE miss
+// before falling back to the empty-string sentinel.
+//
+// Values are stored as NSData with nul-terminated UTF-8 bytes (rather than
+// NSString) so we can hand the core a `const char *` whose lifetime tracks
+// the dictionary entry's. -[NSString UTF8String] is autorelease-pool scoped
+// and would race with the core caching the pointer across calls.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *declaredOptionDefaults;
 @end
 
 // C-string copies of the directory paths — allocated via strdup() in init,
@@ -282,6 +292,64 @@ static void libretro_log_cb(enum retro_log_level level, const char *fmt, ...) {
     return version;
 }
 
+#pragma mark - Core option defaults
+
+// Mirror what RetroArch does: when a core declares its options, capture
+// (key, default_value) so we can hand the default back on GET_VARIABLE
+// instead of the empty string. Empty / NULL values are skipped — see the
+// Beetle PSX hang that motivated this whole layer for why "" is unsafe.
+static void OEStoreOptionDefault(NSMutableDictionary<NSString *, NSData *> *dict,
+                                 const char *key, const char *defaultValue, size_t defaultLen) {
+    if (!dict || !key || !defaultValue || defaultLen == 0) return;
+    NSString *k = [NSString stringWithUTF8String:key];
+    if (!k) return;
+    NSMutableData *d = [NSMutableData dataWithLength:defaultLen + 1];
+    memcpy(d.mutableBytes, defaultValue, defaultLen);
+    ((char *)d.mutableBytes)[defaultLen] = '\0';
+    dict[k] = d;
+}
+
+static void OEStoreOptionDefaultCStr(NSMutableDictionary<NSString *, NSData *> *dict,
+                                     const char *key, const char *defaultValue) {
+    if (!defaultValue) return;
+    OEStoreOptionDefault(dict, key, defaultValue, strlen(defaultValue));
+}
+
+// SET_VARIABLES (V0): value is "Description; default|other|third".
+static void OEParseSetVariables(NSMutableDictionary<NSString *, NSData *> *dict,
+                                const struct retro_variable *vars) {
+    if (!vars) return;
+    for (const struct retro_variable *v = vars; v->key != NULL; v++) {
+        if (!v->value) continue;
+        const char *semi = strchr(v->value, ';');
+        if (!semi) continue;
+        const char *p = semi + 1;
+        while (*p == ' ' || *p == '\t') p++;
+        const char *end = p;
+        while (*end && *end != '|') end++;
+        if (end == p) continue;
+        OEStoreOptionDefault(dict, v->key, p, (size_t)(end - p));
+    }
+}
+
+// SET_CORE_OPTIONS (V1).
+static void OEParseCoreOptionsV1(NSMutableDictionary<NSString *, NSData *> *dict,
+                                 const struct retro_core_option_definition *defs) {
+    if (!defs) return;
+    for (const struct retro_core_option_definition *d = defs; d->key != NULL; d++) {
+        OEStoreOptionDefaultCStr(dict, d->key, d->default_value);
+    }
+}
+
+// SET_CORE_OPTIONS_V2.
+static void OEParseCoreOptionsV2(NSMutableDictionary<NSString *, NSData *> *dict,
+                                 const struct retro_core_options_v2 *opts) {
+    if (!opts || !opts->definitions) return;
+    for (const struct retro_core_option_v2_definition *d = opts->definitions; d->key != NULL; d++) {
+        OEStoreOptionDefaultCStr(dict, d->key, d->default_value);
+    }
+}
+
 #pragma mark - Libretro Callbacks (C API)
 
 static bool libretro_environment_cb(unsigned cmd, void *data) {
@@ -330,9 +398,57 @@ static bool libretro_environment_cb(unsigned cmd, void *data) {
                 return true;
             }
             break;
+        case RETRO_ENVIRONMENT_SET_VARIABLES:
+            if (_current) {
+                if (!_current.declaredOptionDefaults) {
+                    _current.declaredOptionDefaults = [NSMutableDictionary dictionary];
+                }
+                OEParseSetVariables(_current.declaredOptionDefaults,
+                                    (const struct retro_variable *)data);
+            }
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+            if (_current) {
+                if (!_current.declaredOptionDefaults) {
+                    _current.declaredOptionDefaults = [NSMutableDictionary dictionary];
+                }
+                OEParseCoreOptionsV1(_current.declaredOptionDefaults,
+                                     (const struct retro_core_option_definition *)data);
+            }
+            return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
-            // Acknowledge core options
+            if (_current) {
+                if (!_current.declaredOptionDefaults) {
+                    _current.declaredOptionDefaults = [NSMutableDictionary dictionary];
+                }
+                OEParseCoreOptionsV2(_current.declaredOptionDefaults,
+                                     (const struct retro_core_options_v2 *)data);
+            }
+            return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
+            // INTL wrapper: parse the English (.us) array — keys/defaults are
+            // language-independent and OpenEmu doesn't surface translated labels.
+            if (_current && data) {
+                if (!_current.declaredOptionDefaults) {
+                    _current.declaredOptionDefaults = [NSMutableDictionary dictionary];
+                }
+                const struct retro_core_options_intl *intl =
+                    (const struct retro_core_options_intl *)data;
+                OEParseCoreOptionsV1(_current.declaredOptionDefaults, intl->us);
+            }
+            return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
+            if (_current && data) {
+                if (!_current.declaredOptionDefaults) {
+                    _current.declaredOptionDefaults = [NSMutableDictionary dictionary];
+                }
+                const struct retro_core_options_v2_intl *intl =
+                    (const struct retro_core_options_v2_intl *)data;
+                OEParseCoreOptionsV2(_current.declaredOptionDefaults, intl->us);
+            }
+            return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
+            // Acknowledge but don't wire — we have no options UI to refresh.
             return true;
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
             if (data && _current) {
@@ -635,13 +751,24 @@ static bool libretro_environment_cb(unsigned cmd, void *data) {
                     }
                 }
                 
-                // No override matched. Use an empty string rather than NULL so
-                // cores that skip the null-check before calling strcmp() don't
-                // crash. The empty string won't match any valid option value,
-                // so the core naturally falls through to its built-in default.
+                // No per-system override matched. Next layer: the default the
+                // core itself declared via SET_VARIABLES / SET_CORE_OPTIONS{,_V2}.
+                // RetroArch behaves the same way; returning the declared default
+                // is what unsticks Beetle PSX (its gpu_overclock=="" loops forever
+                // because atoi("")==0, but atoi("1") short-circuits the shift).
+                NSString *declaredKey = var->key ? [NSString stringWithUTF8String:var->key] : nil;
+                NSData *declaredDefault = declaredKey ? _current.declaredOptionDefaults[declaredKey] : nil;
+                if (declaredDefault) {
+                    var->value = (const char *)declaredDefault.bytes;
+                    return true;
+                }
+
+                // Last resort: empty string rather than NULL, so cores that
+                // skip the null-check before strcmp() don't crash. Only fires
+                // for keys the core never declared (rare; usually a core bug).
                 var->value = "";
 #if DEBUG
-                NSLog(@"[OELibretro] Core queried variable: %s (System: %s) — no override", var->key, [systemID UTF8String]);
+                NSLog(@"[OELibretro] Core queried variable: %s (System: %s) — no override and no declared default", var->key, [systemID UTF8String]);
 #endif
 #if OE_LIBRETRO_AUDIO_DEBUG
                 {
@@ -1140,6 +1267,10 @@ static void* bridge_dlsym(void *handle, const char *symbol) {
     _isN64    = [systemID containsString:@"n64"];
     _isArcade = [systemID containsString:@"arcade"];
     _isHW     = NO;  // Reset — core will re-request via SET_HW_RENDER if needed
+
+    // Reset declared option defaults so a re-load doesn't carry stale entries
+    // from a previous game/core into the new core's environment callbacks.
+    self.declaredOptionDefaults = [NSMutableDictionary dictionary];
 
     // Populate content directory (ROM's parent folder) for RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY.
     // The libretro spec says this should be the directory that contains the loaded content.

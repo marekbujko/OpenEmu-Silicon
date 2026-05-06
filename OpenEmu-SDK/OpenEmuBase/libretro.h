@@ -56,6 +56,7 @@ extern "C" {
 #define RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK                        12
 #define RETRO_ENVIRONMENT_SET_HW_RENDER                                14
 #define RETRO_ENVIRONMENT_GET_VARIABLE                                 15
+#define RETRO_ENVIRONMENT_SET_VARIABLES                                16
 #define RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE                          17
 #define RETRO_ENVIRONMENT_GET_LOG_INTERFACE                            27
 #define RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY                        30
@@ -68,7 +69,14 @@ extern "C" {
 #define RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS                     44
 #define RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION                     52
 #define RETRO_ENVIRONMENT_SET_CORE_OPTIONS                             53
+#define RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL                        54
 #define RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2                          67
+#define RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL                     68
+#define RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK     69
+
+// ── Core options sizing ──────────────────────────────────────────────
+#define RETRO_NUM_CORE_OPTION_VALUES_MAX 128
+#define RETRO_NUM_LANGUAGES              30
 
 // ── Serialization quirk bitmask (RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS) ─
 #define RETRO_SERIALIZATION_QUIRK_INCOMPLETE                  (1 << 0)
@@ -215,6 +223,60 @@ struct retro_game_info {
     const char *meta;
 };
 
+// ── Core options (V1 + V2) ───────────────────────────────────────────
+// Layouts copied verbatim from upstream libretro-common/include/libretro.h
+// so cores write into them at the correct offsets. Do not reorder.
+
+struct retro_core_option_value {
+    const char *value;
+    const char *label;
+};
+
+struct retro_core_option_definition {
+    const char *key;
+    const char *desc;
+    const char *info;
+    struct retro_core_option_value values[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+    const char *default_value;
+};
+
+struct retro_core_options_intl {
+    struct retro_core_option_definition *us;
+    struct retro_core_option_definition *local;
+};
+
+struct retro_core_option_v2_category {
+    const char *key;
+    const char *desc;
+    const char *info;
+};
+
+struct retro_core_option_v2_definition {
+    const char *key;
+    const char *desc;
+    const char *desc_categorized;
+    const char *info;
+    const char *info_categorized;
+    const char *category_key;
+    struct retro_core_option_value values[RETRO_NUM_CORE_OPTION_VALUES_MAX];
+    const char *default_value;
+};
+
+struct retro_core_options_v2 {
+    struct retro_core_option_v2_category   *categories;
+    struct retro_core_option_v2_definition *definitions;
+};
+
+struct retro_core_options_v2_intl {
+    struct retro_core_options_v2 *us;
+    struct retro_core_options_v2 *local;
+};
+
+typedef void (*retro_core_options_update_display_callback_t)(void);
+struct retro_core_options_update_display_callback {
+    retro_core_options_update_display_callback_t callback;
+};
+
 #ifdef __cplusplus
 }
 #endif
@@ -251,6 +313,20 @@ RETRO_STATIC_ASSERT(sizeof(struct retro_variable)           == 16,
     "retro_variable layout drift from upstream libretro ABI");
 RETRO_STATIC_ASSERT(sizeof(struct retro_log_callback)       == 8,
     "retro_log_callback layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_option_value)  == 16,
+    "retro_core_option_value layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_option_definition) == 2080,
+    "retro_core_option_definition layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_option_v2_category) == 24,
+    "retro_core_option_v2_category layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_option_v2_definition) == 2104,
+    "retro_core_option_v2_definition layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_options_v2)    == 16,
+    "retro_core_options_v2 layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_options_intl)  == 16,
+    "retro_core_options_intl layout drift from upstream libretro ABI");
+RETRO_STATIC_ASSERT(sizeof(struct retro_core_options_v2_intl) == 16,
+    "retro_core_options_v2_intl layout drift from upstream libretro ABI");
 
 // Offset assertion on the exact field that motivated this hardening.
 // If a future change reverts the bool flags to uint32_t (or reorders any
