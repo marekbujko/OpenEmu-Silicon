@@ -78,4 +78,4 @@ Rule of thumb: if the user can install a working RetroArch core for the system, 
 
 ## Historical: bridge cores
 
-The `Flycast-Bridge/`, `Gambatte-Bridge/`, and `VICE-Bridge/` directories contain pre-compiled libretro binaries used during development of the host runtime. They are not referenced by the Xcode project, not shipped to users, and slated for removal. They are not a current pathway — for any new libretro work, use the host runtime + the RetroArch picker.
+Earlier in development the tree contained `Flycast-Bridge/`, `Gambatte-Bridge/`, and `VICE-Bridge/` directories holding pre-compiled libretro binaries used to test the host runtime. They were never shipped to users, never referenced by the Xcode project, and were removed in May 2026. They are mentioned here because older PRs and commits still refer to them. The current pathway for any libretro work is the host runtime plus the RetroArch picker — do not reintroduce in-tree libretro binaries.
