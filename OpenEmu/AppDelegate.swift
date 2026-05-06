@@ -27,6 +27,7 @@
 import Cocoa
 import OpenEmuSystem
 import OpenEmuKit
+import OpenEmuBase
 import UserNotifications
 
 private var appearancePrefChangedKVOContext = 0
@@ -57,6 +58,10 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
     
     var restoreWindow = false
     var libraryDidLoadObserverForRestoreWindow: NSObjectProtocol?
+
+    /// Result of the most recent bridge auto-refresh sweep, surfaced in
+    /// core-inventory.txt so we can confirm the mechanism ran.
+    fileprivate var bridgeRefreshReport: (bridgeVersion: String, refreshed: [String], failed: [(String, String)]) = ("(unknown)", [], [])
     
     var hidEventsMonitor: Any?
     var keyboardEventsMonitor: Any?
@@ -364,7 +369,205 @@ class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
             defaults.removeObject(forKey: "defaultCore.openemu.system.gc")
         }
     }
-    
+
+    /// Walks every installed `*-RetroArch.oecoreplugin` and refreshes any
+    /// stub whose `OEBridgeVersion` doesn't match the running app's
+    /// `OELibretroBridgeVersion`. The bridge code is bundled with the app at
+    /// `Contents/Resources/OpenEmuLibretroBridge.oecoreplugin`, so a fresh
+    /// OpenEmu update silently propagates translator fixes into every
+    /// already-installed RA stub on next launch — no user action required.
+    ///
+    /// Must run before plugin enumeration so refreshed stubs are loaded with
+    /// their new bridge in the same launch.
+    ///
+    /// On any failure, the stub is left untouched on disk (better stale than
+    /// half-written). Failures are logged and surfaced in core-inventory.txt.
+    fileprivate func refreshStaleRetroArchStubs() {
+        let runningVersion = OELibretroBridgeVersion
+        bridgeRefreshReport = (runningVersion, [], [])
+
+        guard let bridgePlugin = PrefCoresController.bundledBridgePluginURL() else {
+            os_log(.info, log: .default, "Bridge auto-refresh skipped: bundled bridge plugin not present in app Resources.")
+            return
+        }
+        let bridgeExe = bridgePlugin.appendingPathComponent("Contents/MacOS/OpenEmuLibretroBridge")
+        guard FileManager.default.fileExists(atPath: bridgeExe.path) else {
+            os_log(.error, log: .default, "Bridge auto-refresh skipped: bundled bridge executable missing at %{public}@", bridgeExe.path)
+            return
+        }
+
+        let coresDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/OpenEmu/Cores")
+        guard let entries = try? FileManager.default.contentsOfDirectory(at: coresDir, includingPropertiesForKeys: nil) else {
+            return
+        }
+
+        var refreshed: [String] = []
+        var failed: [(String, String)] = []
+
+        for stub in entries
+            where stub.pathExtension == "oecoreplugin"
+               && stub.deletingPathExtension().lastPathComponent.hasSuffix("-RetroArch")
+        {
+            let plistURL = stub.appendingPathComponent("Contents/Info.plist")
+            guard
+                let data  = try? Data(contentsOf: plistURL),
+                var plist = (try? PropertyListSerialization.propertyList(from: data, options: [.mutableContainers], format: nil)) as? [String: Any]
+            else {
+                failed.append((stub.lastPathComponent, "Info.plist unreadable"))
+                continue
+            }
+
+            if let stamped = plist["OEBridgeVersion"] as? String, stamped == runningVersion {
+                continue
+            }
+
+            guard let exeName = plist["CFBundleExecutable"] as? String else {
+                failed.append((stub.lastPathComponent, "CFBundleExecutable missing"))
+                continue
+            }
+            let stubExe = stub.appendingPathComponent("Contents/MacOS/\(exeName)")
+
+            do {
+                if FileManager.default.fileExists(atPath: stubExe.path) {
+                    try FileManager.default.removeItem(at: stubExe)
+                }
+                try FileManager.default.copyItem(at: bridgeExe, to: stubExe)
+
+                plist["OEBridgeVersion"] = runningVersion
+                let newData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+                try newData.write(to: plistURL)
+
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+                task.arguments     = ["--force", "--sign", "-", stub.path]
+                try task.run()
+                task.waitUntilExit()
+                guard task.terminationStatus == 0 else {
+                    failed.append((stub.lastPathComponent, "codesign exit \(task.terminationStatus)"))
+                    continue
+                }
+
+                refreshed.append(stub.deletingPathExtension().lastPathComponent)
+                os_log(.info, log: .default, "Bridge auto-refresh: updated %{public}@ to bridge version %{public}@", stub.lastPathComponent, runningVersion)
+            } catch {
+                failed.append((stub.lastPathComponent, error.localizedDescription))
+                os_log(.error, log: .default, "Bridge auto-refresh failed for %{public}@: %{public}@", stub.lastPathComponent, error.localizedDescription)
+            }
+        }
+
+        bridgeRefreshReport = (runningVersion, refreshed, failed)
+    }
+
+    /// One-shot diagnostic written at startup so we can see what core plugins
+    /// actually loaded and which systems they advertise. Output goes to
+    /// ~/Library/Logs/OpenEmu/core-inventory.txt — easier to read than the
+    /// unified log, and survives across launches. Useful when triaging
+    /// "core X doesn't appear in the picker for system Y" reports.
+    fileprivate func logCorePluginInventory() {
+        let plugins = OECorePlugin.allPlugins.sorted {
+            $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+
+        var out = ""
+        out += "=== OpenEmu core plugin inventory ===\n"
+        out += "timestamp: \(Date())\n"
+        out += "loaded: \(plugins.count) plugins\n\n"
+
+        let r = bridgeRefreshReport
+        out += "--- Bridge auto-refresh ---\n"
+        out += "running bridge version: \(r.bridgeVersion)\n"
+        out += "refreshed this launch: \(r.refreshed)\n"
+        if r.failed.isEmpty {
+            out += "failed this launch:    []\n\n"
+        } else {
+            out += "failed this launch:\n"
+            for (name, err) in r.failed {
+                out += "  \(name): \(err)\n"
+            }
+            out += "\n"
+        }
+
+        out += "--- All plugins (sorted) ---\n"
+        for p in plugins {
+            let bid = p.bundleIdentifier
+            let systems = p.systemIdentifiers.joined(separator: ",")
+            let isRA = bid.contains("RetroArch") || p.displayName.contains("(RetroArch)")
+            out += "  \(p.displayName) [\(bid)] systems=[\(systems)] RA=\(isRA ? "YES" : "no")\n"
+        }
+
+        // Per-system rollup for the systems most commonly affected.
+        let systemsOfInterest = [
+            "openemu.system.psx", "openemu.system.snes", "openemu.system.psp",
+            "openemu.system.gba", "openemu.system.c64",  "openemu.system.arcade",
+            "openemu.system.n64", "openemu.system.dc",   "openemu.system.saturn",
+            "openemu.system.nds", "openemu.system.gc",   "openemu.system.wii",
+            "openemu.system.ps2",
+        ]
+        out += "\n--- Per-system rollup ---\n"
+        for sysID in systemsOfInterest {
+            let matched = OECorePlugin.corePlugins(forSystemIdentifier: sysID)
+                .map { $0.displayName }
+                .sorted()
+            out += "  \(sysID): [\(matched.joined(separator: ", "))]\n"
+        }
+
+        // RA systemid coverage report. For every OE system, list the upstream RA
+        // `systemid` values that map to it. Useful when triaging "I installed an
+        // RA core for X and don't see it in the picker" reports.
+        let raMap = PrefCoresController.retroArchSystemIDMap
+        var oeToRA: [String: [String]] = [:]
+        for (raID, oeIDs) in raMap {
+            for oeID in oeIDs {
+                oeToRA[oeID, default: []].append(raID)
+            }
+        }
+        let allOESystems = OESystemPlugin.allPlugins
+            .compactMap { $0.systemIdentifier }
+            .sorted()
+        out += "\n--- RA systemid coverage (per OE system) ---\n"
+        for oeID in allOESystems {
+            let mapped = (oeToRA[oeID] ?? []).sorted()
+            out += "  \(oeID): [\(mapped.joined(separator: ", "))]\n"
+        }
+
+        // Drop-list: any RA `systemid` from the user's installed RA `.info`
+        // catalog that does NOT map to any OE system. These are silently
+        // ignored at scan time; surfacing them here makes the audit auditable.
+        let infoDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/RetroArch/info")
+        var seen = Set<String>()
+        if let files = try? FileManager.default.contentsOfDirectory(at: infoDir, includingPropertiesForKeys: nil) {
+            for f in files where f.pathExtension == "info" {
+                guard let text = try? String(contentsOf: f, encoding: .utf8) else { continue }
+                for line in text.components(separatedBy: .newlines)
+                    where line.hasPrefix("systemid")
+                {
+                    let parts = line.components(separatedBy: "=")
+                    if parts.count >= 2 {
+                        let val = parts[1...].joined(separator: "=")
+                            .trimmingCharacters(in: .whitespaces)
+                            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                        seen.insert(val)
+                    }
+                }
+            }
+        }
+        let dropped = seen.subtracting(raMap.keys).sorted()
+        out += "\n--- RA systemids present upstream but NOT mapped to any OE system ---\n"
+        if dropped.isEmpty {
+            out += "  (none — every upstream systemid in your RA install maps to an OE system)\n"
+        } else {
+            for d in dropped { out += "  \(d)\n" }
+        }
+
+        let logsDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/OpenEmu")
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        let outURL = logsDir.appendingPathComponent("core-inventory.txt")
+        try? out.write(to: outURL, atomically: true, encoding: .utf8)
+    }
+
     fileprivate func loadPlugins(with library: OELibraryDatabase) {
         // Register all system controllers with the bindings controller.
         for plugin in OESystemPlugin.allPlugins {
@@ -858,6 +1061,11 @@ extension AppDelegate: NSMenuDelegate {
 @objc extension AppDelegate: OpenEmuApplicationDelegateProtocol {
     
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Refresh stale RetroArch stub bridges before any plugin enumeration so
+        // newly-refreshed stubs load with the current translator code in this
+        // same launch — not the next one.
+        refreshStaleRetroArchStubs()
+
         atexit {
             // Always remove the XPC broker registered with launchd.
             // If the app was executed under App Translocation,
@@ -903,7 +1111,8 @@ extension AppDelegate: NSMenuDelegate {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
         validateDefaultPluginAssignments()
-        
+        logCorePluginInventory()
+
         DispatchQueue.main.async {
             self.loadDatabase()
         }

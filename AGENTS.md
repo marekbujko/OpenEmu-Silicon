@@ -223,6 +223,20 @@ The issue tracker at `nickybmon/OpenEmu-Silicon` is the primary place for bug re
 
 ---
 
+## Libretro Bridge Version Bumps
+
+When you change `OpenEmu-SDK/OpenEmuBase/OELibretroCoreTranslator.{h,m}` in any way that affects runtime behavior, **bump `OELibretroBridgeVersion` in the same commit**. The constant lives at the top of `OELibretroCoreTranslator.m`.
+
+The version stamp is what drives the auto-refresh of installed RetroArch stub plugins on next launch (`refreshStaleRetroArchStubs()` in `AppDelegate.swift`). Forgetting to bump it means users keep running the old buggy bridge — a fix shipped in source never reaches the installed `*-RetroArch.oecoreplugin` bundles.
+
+Bump rules:
+
+- Behavioral change to the translator (input mapping, save state, audio, video, lifecycle) → bump.
+- Pure refactor with no observable change (renaming a private method, comment-only edit, formatting) → no bump needed.
+- When in doubt, bump. The cost of a needless refresh on launch is microseconds; the cost of a missed bump is users still hitting the bug.
+
+---
+
 ## License Rules
 
 The main app is **BSD 2-Clause**. Emulator cores are mostly **GPL v2**. Key rules:

@@ -56,6 +56,8 @@
 #define RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE (47 | 0x10000)
 #endif
 
+NSString * const OELibretroBridgeVersion = @"1";
+
 
 @interface OELibretroCoreTranslator () <OELibretroInputReceiver>
 @property (nonatomic, strong) NSBundle *coreBundle;
@@ -223,6 +225,7 @@ static void libretro_log_cb(enum retro_log_level level, const char *fmt, ...) {
     void (*_retro_set_input_poll)(retro_input_poll_t);
     void (*_retro_set_input_state)(retro_input_state_t);
     void (*_retro_run)(void);
+    void (*_retro_reset)(void);
     bool (*_retro_load_game)(const struct retro_game_info *game);
     void (*_retro_unload_game)(void);
     
@@ -1183,6 +1186,7 @@ static void* bridge_dlsym(void *handle, const char *symbol) {
     RESOLVE(retro_set_input_poll);
     RESOLVE(retro_set_input_state);
     RESOLVE(retro_run);
+    RESOLVE(retro_reset);
     RESOLVE(retro_load_game);
     RESOLVE(retro_unload_game);
     
@@ -1322,6 +1326,10 @@ static void* bridge_dlsym(void *handle, const char *symbol) {
     }
     
     if (_retro_run) _retro_run();
+}
+
+- (void)resetEmulation {
+    if (_retro_reset) _retro_reset();
 }
 
 - (void)startEmulation {
@@ -1809,6 +1817,42 @@ static const uint8_t OEArcadeButtonToLibretro[] = {
     [self didReleaseOEButton:button forPlayer:player];
 }
 
+// OEPSXButton enum analog entries:
+// 17 LeftAnalogUp, 18 LeftAnalogDown, 19 LeftAnalogLeft, 20 LeftAnalogRight,
+// 21 RightAnalogUp, 22 RightAnalogDown, 23 RightAnalogLeft, 24 RightAnalogRight.
+- (oneway void)didMovePSXJoystickDirection:(NSInteger)button withValue:(CGFloat)value forPlayer:(NSUInteger)player {
+    NSUInteger port = player > 0 ? player - 1 : 0;
+    int16_t scaledValue = (int16_t)(value * 0x7FFF);
+    switch (button) {
+        case 17: // LeftAnalogUp
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT axis:RETRO_DEVICE_ID_ANALOG_Y value:-scaledValue forPort:port];
+            break;
+        case 18: // LeftAnalogDown
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT axis:RETRO_DEVICE_ID_ANALOG_Y value:scaledValue forPort:port];
+            break;
+        case 19: // LeftAnalogLeft
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT axis:RETRO_DEVICE_ID_ANALOG_X value:-scaledValue forPort:port];
+            break;
+        case 20: // LeftAnalogRight
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT axis:RETRO_DEVICE_ID_ANALOG_X value:scaledValue forPort:port];
+            break;
+        case 21: // RightAnalogUp
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_Y value:-scaledValue forPort:port];
+            break;
+        case 22: // RightAnalogDown
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_Y value:scaledValue forPort:port];
+            break;
+        case 23: // RightAnalogLeft
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_X value:-scaledValue forPort:port];
+            break;
+        case 24: // RightAnalogRight
+            [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_X value:scaledValue forPort:port];
+            break;
+        default:
+            break;
+    }
+}
+
 - (oneway void)didPushColecoVisionButton:(NSInteger)button forPlayer:(NSUInteger)player {
     [self didPushOEButton:button forPlayer:player];
 }
@@ -2201,24 +2245,6 @@ static const NSUInteger OEDCButtonCount = sizeof(OEDCButtonToLibretro) / sizeof(
     }
 }
 
-- (oneway void)didMovePSXJoystickDirection:(NSInteger)button withValue:(CGFloat)value forPlayer:(NSUInteger)player {
-    // OEPSXLeftAnalog{Up=17,Down=18,Left=19,Right=20}  -> LEFT
-    // OEPSXRightAnalog{Up=21,Down=22,Left=23,Right=24} -> RIGHT
-    NSUInteger port = player > 0 ? player - 1 : 0;
-    int16_t scaled = (int16_t)(value * 0x7FFF);
-    switch (button) {
-        case 17: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT  axis:RETRO_DEVICE_ID_ANALOG_Y value:-scaled forPort:port]; break;
-        case 18: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT  axis:RETRO_DEVICE_ID_ANALOG_Y value: scaled forPort:port]; break;
-        case 19: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT  axis:RETRO_DEVICE_ID_ANALOG_X value:-scaled forPort:port]; break;
-        case 20: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_LEFT  axis:RETRO_DEVICE_ID_ANALOG_X value: scaled forPort:port]; break;
-        case 21: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_Y value:-scaled forPort:port]; break;
-        case 22: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_Y value: scaled forPort:port]; break;
-        case 23: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_X value:-scaled forPort:port]; break;
-        case 24: [self receiveLibretroAnalogIndex:RETRO_DEVICE_INDEX_ANALOG_RIGHT axis:RETRO_DEVICE_ID_ANALOG_X value: scaled forPort:port]; break;
-        default: break;
-    }
-}
-
 - (oneway void)didMoveSaturnJoystickDirection:(NSInteger)button withValue:(CGFloat)value forPlayer:(NSUInteger)player {
     // OESaturnLeftAnalog{Up=14,Down=15,Left=16,Right=17} -> LEFT stick.
     // AnalogL/AnalogR (18/19) are triggers — left as no-op pending verified mapping.
@@ -2261,5 +2287,75 @@ static const NSUInteger OEDCButtonCount = sizeof(OEDCButtonToLibretro) / sizeof(
 - (void)rightMouseUp {}
 - (void)keyDown:(unsigned short)keyCode characters:(NSString *)characters charactersIgnoringModifiers:(NSString *)charactersIgnoringModifiers flags:(NSEventModifierFlags)flags {}
 - (void)keyUp:(unsigned short)keyCode characters:(NSString *)characters charactersIgnoringModifiers:(NSString *)charactersIgnoringModifiers flags:(NSEventModifierFlags)flags {}
+
+#pragma mark - Responder safety net
+
+// Recognise the well-known OE responder selector shapes so we can swallow
+// calls to systems that this translator hasn't been wired up for yet.
+// Without this, the first input event for an unhandled system crashes the
+// helper with "unrecognized selector". Better: log once, drop the input,
+// let the user discover the limitation themselves.
+static BOOL OELibretroIsKnownResponderSelector(SEL sel) {
+    NSString *name = NSStringFromSelector(sel);
+    static NSArray<NSString *> *patterns = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        patterns = @[
+            @"^didPush.+Button:forPlayer:$",
+            @"^didRelease.+Button:forPlayer:$",
+            @"^didPush.+Button:$",
+            @"^didRelease.+Button:$",
+            @"^didMove.+JoystickDirection:withValue:forPlayer:$",
+            @"^did(Move|Trigger)LightGun.+",
+            @"^didTouch.+",
+            @"^didReleaseTouch.*",
+            @"^did(Press|Release)Key:.+",
+        ];
+    });
+    for (NSString *pat in patterns) {
+        NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:pat options:0 error:NULL];
+        if ([re numberOfMatchesInString:name options:0 range:NSMakeRange(0, name.length)] > 0) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)sel {
+    NSMethodSignature *sig = [super methodSignatureForSelector:sel];
+    if (sig) return sig;
+    if (OELibretroIsKnownResponderSelector(sel)) {
+        NSUInteger argCount = 2; // self + _cmd
+        NSString *name = NSStringFromSelector(sel);
+        for (NSUInteger i = 0; i < name.length; i++) {
+            if ([name characterAtIndex:i] == ':') argCount++;
+        }
+        NSMutableString *types = [NSMutableString stringWithString:@"v@:"];
+        for (NSUInteger i = 2; i < argCount; i++) [types appendString:@"@"];
+        return [NSMethodSignature signatureWithObjCTypes:[types UTF8String]];
+    }
+    return nil;
+}
+
+- (void)forwardInvocation:(NSInvocation *)invocation {
+    SEL sel = invocation.selector;
+    if (OELibretroIsKnownResponderSelector(sel)) {
+        static os_log_t log = NULL;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ log = os_log_create("org.openemu.libretro", "responder"); });
+        static NSMutableSet<NSString *> *logged = nil;
+        static dispatch_once_t loggedOnce;
+        dispatch_once(&loggedOnce, ^{ logged = [NSMutableSet set]; });
+        NSString *name = NSStringFromSelector(sel);
+        @synchronized (logged) {
+            if (![logged containsObject:name]) {
+                [logged addObject:name];
+                os_log_info(log, "Unhandled responder selector dropped: %{public}@", name);
+            }
+        }
+        return;
+    }
+    [super forwardInvocation:invocation];
+}
 
 @end

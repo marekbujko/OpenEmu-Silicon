@@ -24,6 +24,7 @@
 
 import Cocoa
 import OpenEmuKit
+import OpenEmuBase
 
 // MARK: - Column identifiers
 
@@ -511,6 +512,12 @@ extension PrefCoresController: NSTableViewDelegate {
 
 extension PrefCoresController {
 
+    // Maps upstream RetroArch `.info` `systemid` values to OE system identifiers.
+    // Note: many upstream `systemid`s (commodore_c128, commodore_vic20, commodore_plus4,
+    // commodore_pet, commodore_cbm2, commodore_cbm5x0, commodore_c64_supercpu,
+    // commodore_c64dtv, atari_st, apple_ii, mac68k, dos, pc_88, pc_98, scummvm,
+    // 3ds, xbox, model3, mess, etc.) are intentionally absent because OE has no
+    // SystemPlugin for those systems — silently dropping them is correct.
     private static let systemIDMap: [String: [String]] = [
         // Nintendo
         "game_boy_advance":      ["openemu.system.gba"],
@@ -523,7 +530,8 @@ extension PrefCoresController {
         "gamecube":              ["openemu.system.gc", "openemu.system.wii"],  // Dolphin handles both
         "wii":                   ["openemu.system.wii"],
         "virtual_boy":           ["openemu.system.vb"],
-        "game_and_watch":        ["openemu.system.gw"],
+        // TODO: "game_and_watch" — no SystemPlugin for Game & Watch in OE; leaving
+        // it unmapped until that plugin lands so the install doesn't silently fail.
         "pokemon_mini":          ["openemu.system.pokemonmini"],
         // Sony
         "playstation":           ["openemu.system.psx"],
@@ -565,19 +573,26 @@ extension PrefCoresController {
         "3do":                   ["openemu.system.3do"],
         "colecovision":          ["openemu.system.colecovision"],
         "intellivision":         ["openemu.system.intellivision"],
+        "intv":                  ["openemu.system.intellivision"],  // alternate spelling used by some cores
         "odyssey2":              ["openemu.system.odyssey2"],
         "supervision":           ["openemu.system.sv"],
         "vectrex":               ["openemu.system.vectrex"],
         // Commodore / home computers
         "commodore_c64":         ["openemu.system.c64"],
         "commodore_c64sc":       ["openemu.system.c64"],    // VICE x64sc
+        "commodore_64":          ["openemu.system.c64"],    // alternate spelling used by some cores
         "msx":                   ["openemu.system.msx"],
-        "amiga":                 ["openemu.system.amiga"],
-        "commodore_amiga":       ["openemu.system.amiga"],  // PUAE, Amiberry
+        // TODO: "amiga" / "commodore_amiga" — no SystemPlugin for Amiga in OE;
+        // leaving unmapped (PUAE, Amiberry) until that plugin lands so the
+        // install doesn't silently fail with no plugin to register against.
         // Arcade
         "fb_alpha":              ["openemu.system.arcade"],
         "mame":                  ["openemu.system.arcade"],
     ]
+
+    /// Read-only view of the upstream-RA `systemid` → OE system identifier map,
+    /// for the startup inventory diagnostic in AppDelegate.
+    static var retroArchSystemIDMap: [String: [String]] { systemIDMap }
 
     private func scanRetroArchCores() -> [RetroArchCore] {
         let fm = FileManager.default
@@ -637,6 +652,10 @@ extension PrefCoresController {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 try self._createPlugin(core)
+                // Register the freshly-created bundle in OECorePlugin.allPlugins
+                // so pickers (right-click "Play With…", launch dialog) see it
+                // immediately instead of after the user restarts OpenEmu.
+                _ = try? OECorePlugin.plugin(bundleAtURL: core.installedPluginURL)
                 completion(nil)
             } catch {
                 completion(error)
@@ -653,16 +672,25 @@ extension PrefCoresController {
         let plistURL  = plugin.appendingPathComponent("Contents/Info.plist")
         try fm.createDirectory(at: macOSDir, withIntermediateDirectories: true)
 
-        // Copy any existing bridge binary as the stub executable.
-        guard let templateBin = findTemplateBinary() else {
+        // Source the stub executable from the canonical bridge bundle inside
+        // OpenEmu.app/Contents/Resources/. Falls back to scanning installed
+        // native cores only if the bundle hasn't been wired into the app yet
+        // (transition-period safety; remove the fallback once shipping).
+        let bridgeBin: URL
+        if let bundled = bundledBridgeExecutableURL() {
+            bridgeBin = bundled
+        } else if let template = findTemplateBinary() {
+            bridgeBin = template
+        } else {
             throw NSError(domain: "OpenEmu", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "No installed OpenEmu core found to use as a plugin template. Install any core from the list above first."
+                NSLocalizedDescriptionKey: "No bridge bundle or installed OpenEmu core found to seed the plugin executable."
             ])
         }
         let binaryURL = macOSDir.appendingPathComponent(core.pluginName)
-        try fm.copyItem(at: templateBin, to: binaryURL)
+        try fm.copyItem(at: bridgeBin, to: binaryURL)
 
-        // Write Info.plist
+        // Write Info.plist. OEBridgeVersion stamps the stub with the translator
+        // version it ships against so the app can refresh stale stubs on launch.
         let plist: [String: Any] = [
             "CFBundleDevelopmentRegion": "English",
             "CFBundleExecutable":        core.pluginName,
@@ -678,6 +706,7 @@ extension PrefCoresController {
             "OEGameCoreName":            core.displayName,
             "OESystemIdentifiers":       core.systemIDs,
             "OEGameCorePlayerCount":     "2",
+            "OEBridgeVersion":           OELibretroBridgeVersion,
         ]
         let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try plistData.write(to: plistURL)
@@ -688,6 +717,24 @@ extension PrefCoresController {
         task.arguments     = ["--force", "--sign", "-", plugin.path]
         try task.run()
         task.waitUntilExit()
+    }
+
+    /// URL of the bridge plugin bundle shipped inside OpenEmu.app/Contents/PlugIns/,
+    /// or nil if it hasn't been built into this app (e.g. older build before the
+    /// bridge target landed). Lives in PlugIns rather than Resources because
+    /// Xcode's modern build system rejects copy-from-built-product into Resources
+    /// as a dependency cycle when the destination is being processed by the
+    /// app target's "Update Info.plist" run-script phase.
+    static func bundledBridgePluginURL() -> URL? {
+        let url = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/PlugIns/OpenEmuLibretroBridge.oecoreplugin")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private func bundledBridgeExecutableURL() -> URL? {
+        guard let plugin = Self.bundledBridgePluginURL() else { return nil }
+        let exe = plugin.appendingPathComponent("Contents/MacOS/OpenEmuLibretroBridge")
+        return FileManager.default.fileExists(atPath: exe.path) ? exe : nil
     }
 
     private func findTemplateBinary() -> URL? {

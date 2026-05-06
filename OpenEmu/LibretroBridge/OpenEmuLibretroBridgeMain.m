@@ -21,17 +21,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#import <OpenEmuBase/OEGameCore.h>
+// This file is the sole compiled source for the OpenEmuLibretroBridge.oecoreplugin
+// target. The bundle has no entry point of its own — it exists to ship the
+// OpenEmuBase translator code (linked in via the framework) as a valid loadable
+// `.oecoreplugin` bundle. AppDelegate.refreshStaleRetroArchStubs() copies this
+// bundle's executable into installed RetroArch stubs at launch so bridge fixes
+// flow through automatically. See AGENTS.md → "Libretro Bridge Version Bumps".
 
-/// Version stamp for the OE→libretro translator code that ships inside this
-/// binary. Bump this in the same commit as any behavioral change to
-/// OELibretroCoreTranslator.{h,m}. On every launch, OpenEmu compares this
-/// value to the OEBridgeVersion key inside each installed RetroArch stub
-/// and refreshes any stub whose version is missing or stale, so users
-/// pick up bridge fixes without having to re-add cores.
-extern NSString * _Nonnull const OELibretroBridgeVersion;
+#import <Foundation/Foundation.h>
+#import <OpenEmuBase/OELibretroCoreTranslator.h>
 
-@interface OELibretroCoreTranslator : OEGameCore <OELibretroInputReceiver>
-/// Extracts the internal 'library_version' from a Libretro dylib without full initialization.
-+ (nullable NSString *)libraryVersionForCoreAtURL:(nonnull NSURL *)url;
-@end
+// Touch the symbol so the linker keeps OELibretroCoreTranslator + the bridge
+// version constant in the bundle binary even though no code path inside this
+// translation unit calls them at runtime. Without a reference, dead-code
+// stripping at link time may drop the class.
+__attribute__((used))
+static void OpenEmuLibretroBridgeKeepSymbols(void) {
+    (void)[OELibretroCoreTranslator class];
+    (void)OELibretroBridgeVersion;
+}
