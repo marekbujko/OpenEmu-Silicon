@@ -153,7 +153,9 @@ if command -v sentry-cli &>/dev/null; then
   DERIVED_DATA=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -name "OpenEmu-metal-*" -type d 2>/dev/null | head -1)
   if [ -n "$DERIVED_DATA" ]; then
     CORE_DSYM_DIR="$DERIVED_DATA/Build/Products/Release"
-    mapfile -d '' CORE_DSYMS < <(find "$CORE_DSYM_DIR" -maxdepth 1 -name "*.oecoreplugin.dSYM" -type d -print0 2>/dev/null)
+    CORE_DSYMS=()
+    while IFS= read -r -d '' dsym; do CORE_DSYMS+=("$dsym"); done \
+      < <(find "$CORE_DSYM_DIR" -maxdepth 1 -name "*.oecoreplugin.dSYM" -type d -print0 2>/dev/null)
     if [ "${#CORE_DSYMS[@]}" -gt 0 ]; then
       echo "Uploading ${#CORE_DSYMS[@]} core plugin dSYM(s)..."
       sentry-cli debug-files upload \
