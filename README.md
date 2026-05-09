@@ -20,7 +20,7 @@ This is a community-maintained fork of OpenEmu for M-series Macs. The app runs o
 
 ---
 
-## What this fork is and isn't
+## What this fork is (and isn't)
 
 OpenEmu is the work of an exceptional team of developers who built one of the finest pieces of Mac software ever made — and kept improving it for over a decade.
 
@@ -108,7 +108,7 @@ Quick summary: 30+ systems work today, including NES, SNES, Game Boy, GBA, N64, 
 
 ## About This Project
 
-OpenEmu is one of the best pieces of Mac software ever made. [stuartcarnie](https://github.com/stuartcarnie) brought Metal rendering to the app in 2019. [MaddTheSane](https://github.com/MaddTheSane) ported the emulation cores to ARM64 starting in 2021. [cyco](https://github.com/cyco), [clobber](https://github.com/clobber), [J-rg](https://github.com/J-rg), and the rest of the OpenEmu team built the application, the plugin architecture, and the library experience over more than a decade. That work is the foundation everything here stands on.
+The original OpenEmu is still an amazing piece of Mac software. [stuartcarnie](https://github.com/stuartcarnie) brought Metal rendering to the app in 2019. [MaddTheSane](https://github.com/MaddTheSane) ported the emulation cores to ARM64 starting in 2021. [cyco](https://github.com/cyco), [clobber](https://github.com/clobber), [J-rg](https://github.com/J-rg), and the rest of the OpenEmu team built the application, the plugin architecture, and the library experience over more than a decade. That work is the foundation everything here stands on.
 
 The original project went quiet around 2024 after the last release. By that time, the original team had already done significant work on the ARM64 cores. The ARM64 core work was real and substantial, but it was never assembled into a release — the last official binary (December 2023) was stated as Intel-only. [bazley82](https://github.com/bazley82) published a downloadable ARM64 build in early 2026, pulling together the ARM64-capable core submodules the original team had prepared into a single repo and release. This fork continued from there: RetroAchievements shipped across 9+ cores; a Libretro Bridge was built to load RetroArch cores directly inside OpenEmu; ScreenScraper cover art was integrated; Dreamcast was migrated from Reicast to Flycast; save persistence, system detection, and the core update pipeline were all fixed; and the app was hardened for macOS 26 (Tahoe).
 
@@ -121,9 +121,7 @@ The original project went quiet around 2024 after the last release. By that time
 
 ## A Note on AI-Assisted Development
 
-I'm not a professional developer. I work on this project using Cursor and Claude as development assistants — they help me write and debug code I couldn't write alone. I review every change, test everything, and make all the calls about direction and quality.
-
-I'm transparent about this because honesty with the community matters more than maintaining an illusion of expertise I don't have. The goal is to keep something good alive and make it genuinely usable for players.
+I work on this project with AI assisted development practices — they help me write and debug code I couldn't write alone. I review every change, test everything, and make all the calls about direction and quality. I'm transparent about this because honesty with the community matters more than maintaining an illusion of expertise I don't have. The goal is to keep something good alive and make it genuinely usable for players.
 
 ---
 
