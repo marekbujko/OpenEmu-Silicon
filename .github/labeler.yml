@@ -1,28 +1,34 @@
 # Maps PR file paths to labels. Uses the actual label names from the repo.
 # sync-labels: false in the workflow — manual labels are preserved.
+# Info.plist changes inside a core directory are excluded from core labels
+# because they're often cross-cutting (e.g. adding an RA capability flag to all cores).
 
 'core: NES':
   - changed-files:
     - any-glob-to-any-file:
       - 'FCEU/**'
       - 'Nestopia/**'
+      - '!**/Info.plist'
 
 'core: SNES':
   - changed-files:
     - any-glob-to-any-file:
       - 'SNES9x/**'
       - 'BSNES/**'
+      - '!**/Info.plist'
 
 'core: Sega':
   - changed-files:
     - any-glob-to-any-file:
       - 'GenesisPlus/**'
       - 'CrabEmu/**'
+      - '!**/Info.plist'
 
 'core: N64':
   - changed-files:
     - any-glob-to-any-file:
       - 'Mupen64Plus/**'
+      - '!**/Info.plist'
 
 'core: Atari':
   - changed-files:
@@ -30,6 +36,7 @@
       - 'Stella/**'
       - 'ProSystem/**'
       - 'Atari800/**'
+      - '!**/Info.plist'
 
 'core: other':
   - changed-files:
@@ -46,6 +53,7 @@
       - 'blueMSX/**'
       - 'PokeMini/**'
       - 'Potator-Core/**'
+      - '!**/Info.plist'
 
 'retro-achievements':
   - changed-files:
